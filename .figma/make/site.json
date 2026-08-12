@@ -1,5 +1,9 @@
 {
+  "title": "Tafakuri",
   "description": "A premium digital publication offering deep reflections and insightful articles on life, technology, and society for thoughtful, curious readers.",
+  "icons": {
+    "icon": "/favicon.png"
+  },
   "robots": {
     "index": false
   },

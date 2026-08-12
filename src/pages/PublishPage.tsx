@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { Article } from '../types/article'
 import { createArticle } from '../lib/api'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { getSiteUrl } from '../lib/siteUrl'
 
 const WRAP = { maxWidth: 1200, margin: '0 auto', padding: '0 24px' } as const
 
@@ -95,7 +96,13 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
       const result =
         authMode === 'signin'
           ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
-          : await supabase.auth.signUp({ email: authEmail, password: authPassword })
+          : await supabase.auth.signUp({
+              email: authEmail,
+              password: authPassword,
+              options: {
+                emailRedirectTo: `${getSiteUrl()}/`,
+              },
+            })
 
       if (result.error) throw result.error
       if (!result.data.session && authMode === 'signup') {

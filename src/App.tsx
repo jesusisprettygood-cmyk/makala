@@ -3,6 +3,8 @@ import type { Article } from './types/article'
 import { FALLBACK_ARTICLES } from './data/fallbackArticles'
 import { fetchArticles, isApiConfigured } from './lib/api'
 import PublishPage from './pages/PublishPage'
+import BrandLogo from './components/BrandLogo'
+import { supabase } from './lib/supabase'
 
 type Page = 'home' | 'article' | 'about' | 'explore' | 'publish'
 type NavFn = (page: Page, article?: Article) => void
@@ -127,13 +129,8 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
       }}>
         <div style={{ ...WRAP, display: 'flex', alignItems: 'center', height: 64, gap: 40 }}>
           {/* Logo */}
-          <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flexShrink: 0 }}>
-            <span style={{ fontFamily: 'var(--font-serif)', fontSize: 19, fontWeight: 700, letterSpacing: '0.15em', color: 'var(--ink)', lineHeight: 1 }}>
-              TAFAKURI
-            </span>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: '0.1em', marginTop: 3 }}>
-              by Ndomi
-            </span>
+          <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+            <BrandLogo height={34} />
           </button>
 
           {/* Center nav */}
@@ -186,7 +183,7 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(24,22,26,0.5)', backdropFilter: 'blur(2px)' }} />
           <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 280, background: 'var(--paper)', padding: '28px 32px', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 48 }}>
-              <span style={{ fontFamily: 'var(--font-serif)', fontSize: 17, fontWeight: 700, letterSpacing: '0.15em', color: 'var(--ink)' }}>TAFAKURI</span>
+              <BrandLogo height={28} />
               <button onClick={() => setMenuOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-2)', display: 'flex' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -636,8 +633,7 @@ function Footer({ navigate }: { navigate: NavFn }) {
           {/* Brand */}
           <div>
             <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', marginBottom: 20 }}>
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 700, letterSpacing: '0.15em', color: 'var(--paper)', lineHeight: 1 }}>TAFAKURI</div>
-              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', marginTop: 4 }}>by Ndomi</div>
+              <BrandLogo height={32} inverted />
             </button>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.75, color: 'rgba(237,233,225,0.5)', margin: '0 0 28px', maxWidth: 280 }}>
               A premium editorial publication for deep reflection, ideas and perspectives worth thinking about.
@@ -1154,6 +1150,17 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!supabase) return
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session && window.location.hash.includes('access_token')) {
+        window.history.replaceState({}, '', window.location.pathname)
+        setPage('publish')
+      }
+    })
+  }, [])
+
+  useEffect(() => {
     if (!isApiConfigured()) return
 
     let cancelled = false
@@ -1204,10 +1211,9 @@ export default function App() {
       {page === 'article' && (
         <div style={{ background: 'var(--ink)', padding: '40px 0' }}>
           <div style={{ ...WRAP, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 700, letterSpacing: '0.15em', color: 'var(--paper)' }}>TAFAKURI</div>
-              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 9, color: 'var(--accent)', letterSpacing: '0.1em', marginTop: 3 }}>by Ndomi</div>
-            </div>
+            <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <BrandLogo height={24} inverted />
+            </button>
             <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 13, color: 'rgba(237,233,225,0.3)' }}>Think deeper. See differently.</span>
             <span style={{ fontFamily: 'var(--font-sans)', fontSize: 11, color: 'rgba(237,233,225,0.3)' }}>© 2026 Ndomi</span>
           </div>
