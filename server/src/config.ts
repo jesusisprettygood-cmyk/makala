@@ -10,6 +10,7 @@ function requireEnv(name: string): string {
 }
 
 export const SUPABASE_URL = requireEnv("SUPABASE_URL");
+export const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY ?? "";
 export const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 export const PORT = Number(env.PORT ?? "3000");
 export const CORS_ORIGINS = env.CORS_ORIGINS
