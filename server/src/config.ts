@@ -13,6 +13,24 @@ export const SUPABASE_URL = requireEnv("SUPABASE_URL");
 export const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY ?? "";
 export const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 export const PORT = Number(env.PORT ?? "3000");
-export const CORS_ORIGINS = env.CORS_ORIGINS
-  ? env.CORS_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
-  : ["*"];
+
+function normalizeOrigin(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, "");
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+export const FRONTEND_URL = env.FRONTEND_URL ? normalizeOrigin(env.FRONTEND_URL) : "";
+
+export const CORS_ORIGINS = (() => {
+  const origins = new Set<string>();
+  if (env.CORS_ORIGINS) {
+    for (const origin of env.CORS_ORIGINS.split(",")) {
+      const normalized = normalizeOrigin(origin);
+      if (normalized && normalized !== "*") origins.add(normalized);
+    }
+  }
+  if (FRONTEND_URL) origins.add(FRONTEND_URL);
+  return [...origins];
+})();

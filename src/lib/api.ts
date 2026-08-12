@@ -41,12 +41,22 @@ function apiBase(): string {
   return `${API_URL}/api`
 }
 
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch {
+    throw new Error(
+      'Network error — could not reach the API. Check VITE_API_URL and backend CORS_ORIGINS / FRONTEND_URL on Railway.',
+    )
+  }
+}
+
 export function isApiConfigured(): boolean {
   return Boolean(API_URL)
 }
 
 export async function fetchArticles(): Promise<Article[]> {
-  const res = await fetch(`${apiBase()}/articles`)
+  const res = await apiFetch(`${apiBase()}/articles`)
   if (!res.ok) {
     throw new Error(`Failed to load articles (${res.status})`)
   }
@@ -58,7 +68,7 @@ export async function createArticle(
   payload: CreateArticlePayload,
   accessToken: string,
 ): Promise<Article> {
-  const res = await fetch(`${apiBase()}/articles`, {
+  const res = await apiFetch(`${apiBase()}/articles`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -76,7 +86,7 @@ export async function createArticle(
 }
 
 export async function fetchProfile(accessToken: string): Promise<UserProfile> {
-  const res = await fetch(`${apiBase()}/profile`, {
+  const res = await apiFetch(`${apiBase()}/profile`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   const data = (await parseJsonResponse(res)) as { error?: string; profile?: UserProfile }
@@ -90,7 +100,7 @@ export async function updateProfile(
   payload: { displayName?: string; bio?: string },
   accessToken: string,
 ): Promise<UserProfile> {
-  const res = await fetch(`${apiBase()}/profile`, {
+  const res = await apiFetch(`${apiBase()}/profile`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -108,7 +118,7 @@ export async function updateProfile(
 export async function uploadArticleImage(file: File, accessToken: string): Promise<string> {
   const form = new FormData()
   form.append('image', file)
-  const res = await fetch(`${apiBase()}/uploads/article-image`, {
+  const res = await apiFetch(`${apiBase()}/uploads/article-image`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
@@ -123,7 +133,7 @@ export async function uploadArticleImage(file: File, accessToken: string): Promi
 export async function uploadProfilePhoto(file: File, accessToken: string): Promise<string> {
   const form = new FormData()
   form.append('photo', file)
-  const res = await fetch(`${apiBase()}/uploads/profile-photo`, {
+  const res = await apiFetch(`${apiBase()}/uploads/profile-photo`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
