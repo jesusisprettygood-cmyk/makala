@@ -1,7 +1,7 @@
 import type { ArticleRow, CreateArticlePayload } from '../types/article'
 import { mapRowToArticle, type Article } from '../types/article'
 
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? ''
+const API_URL = normalizeApiUrl(import.meta.env.VITE_API_URL ?? '')
 
 export type UserProfile = {
   id: string
@@ -10,6 +10,28 @@ export type UserProfile = {
   bio: string
   email: string
   articleCount: number
+}
+
+function normalizeApiUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, '')
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  return `https://${trimmed}`
+}
+
+async function parseJsonResponse(res: Response): Promise<unknown> {
+  const text = await res.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    if (text.trimStart().startsWith('<!')) {
+      throw new Error(
+        'Server returned HTML instead of JSON. Check VITE_API_URL — it must be your backend URL with https:// (e.g. https://makala-production.up.railway.app).',
+      )
+    }
+    throw new Error('Server returned an invalid response.')
+  }
 }
 
 function apiBase(): string {
@@ -28,7 +50,7 @@ export async function fetchArticles(): Promise<Article[]> {
   if (!res.ok) {
     throw new Error(`Failed to load articles (${res.status})`)
   }
-  const data = (await res.json()) as { articles: ArticleRow[] }
+  const data = (await parseJsonResponse(res)) as { articles: ArticleRow[] }
   return (data.articles ?? []).map(mapRowToArticle)
 }
 
@@ -45,23 +67,23 @@ export async function createArticle(
     body: JSON.stringify(payload),
   })
 
-  const data = await res.json()
+  const data = (await parseJsonResponse(res)) as { error?: string; article?: ArticleRow }
   if (!res.ok) {
     throw new Error(data.error ?? `Failed to publish (${res.status})`)
   }
 
-  return mapRowToArticle((data as { article: ArticleRow }).article)
+  return mapRowToArticle(data.article!)
 }
 
 export async function fetchProfile(accessToken: string): Promise<UserProfile> {
   const res = await fetch(`${apiBase()}/profile`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
-  const data = await res.json()
+  const data = (await parseJsonResponse(res)) as { error?: string; profile?: UserProfile }
   if (!res.ok) {
     throw new Error(data.error ?? `Failed to load profile (${res.status})`)
   }
-  return (data as { profile: UserProfile }).profile
+  return data.profile!
 }
 
 export async function updateProfile(
@@ -76,11 +98,11 @@ export async function updateProfile(
     },
     body: JSON.stringify(payload),
   })
-  const data = await res.json()
+  const data = (await parseJsonResponse(res)) as { error?: string; profile?: UserProfile }
   if (!res.ok) {
     throw new Error(data.error ?? `Failed to update profile (${res.status})`)
   }
-  return (data as { profile: UserProfile }).profile
+  return data.profile!
 }
 
 export async function uploadArticleImage(file: File, accessToken: string): Promise<string> {
@@ -91,11 +113,11 @@ export async function uploadArticleImage(file: File, accessToken: string): Promi
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
   })
-  const data = await res.json()
+  const data = (await parseJsonResponse(res)) as { error?: string; url?: string }
   if (!res.ok) {
     throw new Error(data.error ?? `Failed to upload image (${res.status})`)
   }
-  return (data as { url: string }).url
+  return data.url!
 }
 
 export async function uploadProfilePhoto(file: File, accessToken: string): Promise<string> {
@@ -106,9 +128,9 @@ export async function uploadProfilePhoto(file: File, accessToken: string): Promi
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
   })
-  const data = await res.json()
+  const data = (await parseJsonResponse(res)) as { error?: string; url?: string }
   if (!res.ok) {
     throw new Error(data.error ?? `Failed to upload photo (${res.status})`)
   }
-  return (data as { url: string }).url
+  return data.url!
 }
