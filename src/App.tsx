@@ -127,10 +127,10 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
         boxShadow: scrolled ? '0 1px 24px rgba(0,0,0,0.05)' : 'none',
         transition: 'border-color 0.3s, box-shadow 0.3s',
       }}>
-        <div style={{ ...WRAP, display: 'flex', alignItems: 'center', height: 76, gap: 40 }}>
+        <div style={{ ...WRAP, display: 'flex', alignItems: 'center', height: 92, gap: 40 }}>
           {/* Logo */}
           <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
-            <BrandLogo height={52} />
+            <BrandLogo height={72} />
           </button>
 
           {/* Center nav */}
@@ -183,7 +183,7 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(24,22,26,0.5)', backdropFilter: 'blur(2px)' }} />
           <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 280, background: 'var(--paper)', padding: '28px 32px', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 48 }}>
-              <BrandLogo height={44} />
+              <BrandLogo height={56} />
               <button onClick={() => setMenuOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-2)', display: 'flex' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -716,7 +716,7 @@ function Footer({ navigate }: { navigate: NavFn }) {
 function HomePage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
   if (articles.length === 0) return null
   return (
-    <main style={{ paddingTop: 76 }}>
+    <main style={{ paddingTop: 92 }}>
       <HeroSection navigate={navigate} />
       <FeaturedSection article={articles[0]} navigate={navigate} />
       <LatestSection articles={articles} navigate={navigate} />
@@ -750,14 +750,14 @@ function ArticlePage({ article, articles, navigate }: { article: Article; articl
   const related = articles.filter(a => a.id !== article.id).slice(0, 3)
 
   return (
-    <main style={{ paddingTop: 76 }}>
+    <main style={{ paddingTop: 92 }}>
       {/* Reading progress */}
-      <div style={{ position: 'fixed', top: 76, left: 0, right: 0, zIndex: 40, height: 2, background: 'var(--border)' }}>
+      <div style={{ position: 'fixed', top: 92, left: 0, right: 0, zIndex: 40, height: 2, background: 'var(--border)' }}>
         <div style={{ height: '100%', background: 'var(--accent)', width: `${progress * 100}%`, transition: 'width 0.1s' }} />
       </div>
 
       {/* Article header */}
-      <div style={{ ...WRAP, paddingTop: 76 }}>
+      <div style={{ ...WRAP, paddingTop: 92 }}>
         <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--ink-3)', padding: 0, marginBottom: 48, letterSpacing: '0.04em', transition: 'color 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'}
           onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-3)'}
@@ -864,7 +864,7 @@ function ArticlePage({ article, articles, navigate }: { article: Article; articl
           </div>
 
           {/* Sidebar */}
-          <aside className="hidden md:block" style={{ position: 'sticky', top: 88 }}>
+          <aside className="hidden md:block" style={{ position: 'sticky', top: 104 }}>
             <div style={{ marginBottom: 40 }}>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--ink-3)', marginBottom: 16 }}>ON THIS PAGE</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -920,7 +920,7 @@ function ArticlePage({ article, articles, navigate }: { article: Article; articl
 
 function AboutPage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
   return (
-    <main style={{ paddingTop: 76 }}>
+    <main style={{ paddingTop: 92 }}>
       {/* Hero */}
       <section style={{ padding: '96px 0 80px', borderBottom: '1px solid var(--border)' }}>
         <div style={WRAP}>
@@ -1033,7 +1033,7 @@ function ExplorePage({ articles, navigate }: { articles: Article[]; navigate: Na
   })
 
   return (
-    <main style={{ paddingTop: 76 }}>
+    <main style={{ paddingTop: 92 }}>
       {/* Header */}
       <section style={{ padding: '80px 0 56px', borderBottom: '1px solid var(--border)' }}>
         <div style={WRAP}>
