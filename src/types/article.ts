@@ -12,6 +12,8 @@ export interface Article {
   createdAt?: string
   authorId?: string | null
   mostRead?: number
+  likeCount?: number
+  shareCount?: number
 }
 
 const NEW_ARTICLE_DAYS = 7
@@ -34,6 +36,8 @@ export interface ArticleRow {
   author: string
   image: string
   most_read: number | null
+  like_count: number | null
+  share_count: number | null
   author_id: string | null
   created_at: string
   updated_at: string
@@ -68,6 +72,8 @@ export function mapRowToArticle(row: ArticleRow): Article {
     createdAt: row.created_at,
     authorId: row.author_id,
     mostRead: row.most_read ?? undefined,
+    likeCount: row.like_count ?? 0,
+    shareCount: row.share_count ?? 0,
   }
 }
 
@@ -94,6 +100,8 @@ export function normalizeArticleRow(row: Record<string, unknown>): ArticleRow {
     author: String(row.author ?? 'Ndomi'),
     image: String(row.image ?? ''),
     most_read: typeof row.most_read === 'number' ? row.most_read : null,
+    like_count: typeof row.like_count === 'number' ? row.like_count : null,
+    share_count: typeof row.share_count === 'number' ? row.share_count : null,
     author_id: row.author_id ? String(row.author_id) : null,
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: String(row.updated_at ?? new Date().toISOString()),

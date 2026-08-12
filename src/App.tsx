@@ -7,11 +7,10 @@ import {
   categoryMatchesTopic,
   getLatestArticles,
   getMostReadArticles,
-  incrementArticleRead,
-  isRealArticle,
   preferDatabaseArticles,
 } from './lib/articles'
 import { subscribeEmail } from './lib/subscribers'
+import { formatEngagementCount } from './lib/engagement'
 import { useAuth } from './lib/auth'
 import PublishPage from './pages/PublishPage'
 import ProfilePage from './pages/ProfilePage'
@@ -20,6 +19,7 @@ import UserMenu from './components/UserMenu'
 import EmailVerifiedBanner from './components/EmailVerifiedBanner'
 import PublishSuccessBanner from './components/PublishSuccessBanner'
 import NewBadge from './components/NewBadge'
+import ArticleEngagement, { type ArticleEngagementStats } from './components/ArticleEngagement'
 
 type Page = 'home' | 'article' | 'about' | 'explore' | 'publish' | 'profile'
 type NavFn = (page: Page, article?: Article, topic?: string) => void
@@ -813,24 +813,20 @@ function ArticlePage({
   navigate,
   onEdit,
   onDeleted,
+  onEngagementChange,
 }: {
   article: Article
   articles: Article[]
   navigate: NavFn
   onEdit: (article: Article) => void
   onDeleted: (articleId: string) => void
+  onEngagementChange: (articleId: string, stats: Partial<ArticleEngagementStats>) => void
 }) {
   const { session } = useAuth()
   const [progress, setProgress] = useState(0)
   const [deleting, setDeleting] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const isOwner = Boolean(session?.user.id && article.authorId && session.user.id === article.authorId)
-
-  useEffect(() => {
-    if (isRealArticle(article)) {
-      void incrementArticleRead(article.id)
-    }
-  }, [article.id])
 
   async function handleDelete() {
     if (!window.confirm('Delete this article permanently? This cannot be undone.')) return
@@ -901,10 +897,10 @@ function ArticlePage({
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{article.author}</div>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--ink-3)' }}>{article.date} · {article.readTime}</div>
             </div>
-            {/* Share + owner actions */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {/* Engagement + owner actions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
               {isOwner && (
-                <>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <button
                     type="button"
                     onClick={() => onEdit(article)}
@@ -920,16 +916,12 @@ function ArticlePage({
                   >
                     {deleting ? 'Deleting…' : 'Delete'}
                   </button>
-                </>
+                </div>
               )}
-              {['Share', 'Copy link'].map(label => (
-                <button key={label} style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, color: 'var(--ink-3)', padding: '7px 12px', letterSpacing: '0.04em', transition: 'border-color 0.2s, color 0.2s' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--ink-3)' }}
-                >
-                  {label}
-                </button>
-              ))}
+              <ArticleEngagement
+                article={article}
+                onStatsChange={(stats) => onEngagementChange(article.id, stats)}
+              />
             </div>
           </div>
         </div>
@@ -1011,6 +1003,21 @@ function ArticlePage({
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, marginBottom: 32 }}>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--ink-3)', marginBottom: 12 }}>READING TIME</div>
               <div style={{ fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>{article.readTime}</div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, marginBottom: 32 }}>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--ink-3)', marginBottom: 12 }}>ENGAGEMENT</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--ink-2)' }}>
+                  {formatEngagementCount(article.mostRead ?? 0)} reads
+                </div>
+                <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--ink-2)' }}>
+                  {formatEngagementCount(article.likeCount ?? 0)} likes
+                </div>
+                <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--ink-2)' }}>
+                  {formatEngagementCount(article.shareCount ?? 0)} shares
+                </div>
+              </div>
             </div>
 
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, marginBottom: 32 }}>
@@ -1317,6 +1324,17 @@ export default function App() {
     window.scrollTo({ top: 0 })
   }
 
+  function handleEngagementChange(articleId: string, stats: Partial<ArticleEngagementStats>) {
+    const patch = (item: Article): Article => ({
+      ...item,
+      ...(stats.readCount !== undefined ? { mostRead: stats.readCount } : {}),
+      ...(stats.likeCount !== undefined ? { likeCount: stats.likeCount } : {}),
+      ...(stats.shareCount !== undefined ? { shareCount: stats.shareCount } : {}),
+    })
+    setArticles((current) => current.map((item) => (item.id === articleId ? patch(item) : item)))
+    setArticle((current) => (current.id === articleId ? patch(current) : current))
+  }
+
   function handleDeleted(articleId: string) {
     setArticles((current) => current.filter((item) => item.id !== articleId))
     setEditingArticle(null)
@@ -1386,6 +1404,7 @@ export default function App() {
               navigate={navigate}
               onEdit={handleEdit}
               onDeleted={handleDeleted}
+              onEngagementChange={handleEngagementChange}
             />
           )}
           {page === 'about' && <AboutPage articles={displayArticles} navigate={navigate} />}

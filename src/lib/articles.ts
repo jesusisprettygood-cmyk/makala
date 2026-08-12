@@ -1,6 +1,7 @@
 import type { ArticleRow, CreateArticlePayload } from "../types/article";
 import { mapRowToArticle, normalizeArticleRow, type Article } from "../types/article";
 import { supabase } from "./supabase";
+import { trackArticleRead } from "./engagement";
 
 function normalizeBody(body: string): string[] {
   return body
@@ -134,9 +135,8 @@ export async function deleteArticleDirect(articleId: string): Promise<void> {
   }
 }
 
-export async function incrementArticleRead(articleId: string): Promise<void> {
-  if (!supabase) return;
-  await supabase.rpc("increment_article_read", { article_id: articleId });
+export async function incrementArticleRead(articleId: string): Promise<number | null> {
+  return trackArticleRead(articleId);
 }
 
 export function buildTopicCounts(articles: Article[]): { name: string; count: number }[] {
