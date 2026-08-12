@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "start": "serve dist -s -l ${PORT:-3000}",
     "preview": "vite preview",
     "format": "oxfmt"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "serve": "^14.2.4"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
