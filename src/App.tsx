@@ -1,27 +1,36 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import type { Article } from './types/article'
 import { FALLBACK_ARTICLES } from './data/fallbackArticles'
-import { fetchArticles, isApiConfigured } from './lib/api'
+import { deleteArticle, fetchArticles, isApiConfigured } from './lib/api'
+import {
+  buildTopicCounts,
+  categoryMatchesTopic,
+  getLatestArticles,
+  getMostReadArticles,
+  incrementArticleRead,
+  isRealArticle,
+  preferDatabaseArticles,
+} from './lib/articles'
+import { subscribeEmail } from './lib/subscribers'
+import { useAuth } from './lib/auth'
 import PublishPage from './pages/PublishPage'
 import ProfilePage from './pages/ProfilePage'
 import BrandLogo from './components/BrandLogo'
 import UserMenu from './components/UserMenu'
 import EmailVerifiedBanner from './components/EmailVerifiedBanner'
+import PublishSuccessBanner from './components/PublishSuccessBanner'
+import NewBadge from './components/NewBadge'
 
 type Page = 'home' | 'article' | 'about' | 'explore' | 'publish' | 'profile'
-type NavFn = (page: Page, article?: Article) => void
-const TOPICS = [
-  { name: 'Life', count: 12 },
-  { name: 'Technology', count: 8 },
-  { name: 'Business', count: 5 },
-  { name: 'Society', count: 7 },
-  { name: 'Youth', count: 6 },
-  { name: 'Leadership', count: 4 },
-  { name: 'Creativity', count: 9 },
-  { name: 'Human Behavior', count: 11 },
-  { name: 'Personal Reflections', count: 14 },
-  { name: 'Ideas', count: 3 },
-]
+type NavFn = (page: Page, article?: Article, topic?: string) => void
+
+function formatTopicLabel(category: string): string {
+  return category
+    .toLowerCase()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
 
 // ─── Shared Atoms ─────────────────────────────────────────────────────────────
 
@@ -47,7 +56,10 @@ function ArticleCard({ article, navigate, large = false }: { article: Article; n
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ overflow: 'hidden', aspectRatio: large ? '16/10' : '3/2', background: 'var(--muted)', marginBottom: 20 }}>
+      <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: large ? '16/10' : '3/2', background: 'var(--muted)', marginBottom: 20 }}>
+        <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 2 }}>
+          <NewBadge createdAt={article.createdAt} />
+        </div>
         <img
           src={article.image}
           alt={article.title}
@@ -85,7 +97,10 @@ function CompactCard({ article, navigate }: { article: Article; navigate: NavFn 
       onMouseLeave={() => setHovered(false)}
     >
       <div style={{ flex: 1 }}>
-        <CategoryLabel label={article.category} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 2 }}>
+          <CategoryLabel label={article.category} />
+          <NewBadge createdAt={article.createdAt} compact />
+        </div>
         <h4 style={{
           fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 600, lineHeight: 1.35,
           margin: '8px 0 6px', color: hovered ? 'var(--accent)' : 'var(--ink)', transition: 'color 0.2s',
@@ -296,10 +311,11 @@ function FeaturedSection({ article, navigate }: { article: Article; navigate: Na
         <div className="r-grid-featured" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
           {/* Text side */}
           <div>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 28 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 28, flexWrap: 'wrap' }}>
               <span style={{ fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--paper)', background: 'var(--accent)', padding: '4px 10px' }}>
                 FEATURED
               </span>
+              <NewBadge createdAt={article.createdAt} />
               <CategoryLabel label={article.category} />
             </div>
             <h2
@@ -341,7 +357,10 @@ function FeaturedSection({ article, navigate }: { article: Article; navigate: Na
           </div>
 
           {/* Image side */}
-          <div style={{ overflow: 'hidden', aspectRatio: '4/3', background: 'var(--muted)' }}>
+          <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: '4/3', background: 'var(--muted)' }}>
+            <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2 }}>
+              <NewBadge createdAt={article.createdAt} />
+            </div>
             <img
               src={article.image}
               alt={article.title}
@@ -358,7 +377,10 @@ function FeaturedSection({ article, navigate }: { article: Article; navigate: Na
 // ─── Latest Grid ──────────────────────────────────────────────────────────────
 
 function LatestSection({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
-  const grid = articles.slice(1, 8)
+  const skipFeatured = articles.length > 1 ? 1 : 0
+  const grid = getLatestArticles(articles, skipFeatured, 7)
+  if (grid.length === 0) return null
+
   return (
     <section style={{ padding: '96px 0' }}>
       <div style={WRAP}>
@@ -379,18 +401,22 @@ function LatestSection({ articles, navigate }: { articles: Article[]; navigate: 
           </button>
         </div>
 
-        {/* Main two-column row */}
-        <div className="r-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginBottom: 56 }}>
-          <ArticleCard article={grid[0]} navigate={navigate} large />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {grid.slice(1, 4).map(a => <CompactCard key={a.id} article={a} navigate={navigate} />)}
+        {grid.length >= 2 ? (
+          <div className="r-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginBottom: grid.length > 4 ? 56 : 0 }}>
+            <ArticleCard article={grid[0]} navigate={navigate} large />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {grid.slice(1, 4).map(a => <CompactCard key={a.id} article={a} navigate={navigate} />)}
+            </div>
           </div>
-        </div>
+        ) : (
+          <ArticleCard article={grid[0]} navigate={navigate} large />
+        )}
 
-        {/* Three-column row */}
-        <div className="r-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 36, paddingTop: 48, borderTop: '1px solid var(--border)' }}>
-          {grid.slice(4, 7).map(a => <ArticleCard key={a.id} article={a} navigate={navigate} />)}
-        </div>
+        {grid.length > 4 && (
+          <div className="r-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 36, paddingTop: 48, borderTop: '1px solid var(--border)' }}>
+            {grid.slice(4, 7).map(a => <ArticleCard key={a.id} article={a} navigate={navigate} />)}
+          </div>
+        )}
       </div>
     </section>
   )
@@ -439,8 +465,10 @@ function ThinkingSection() {
 
 // ─── Topics ───────────────────────────────────────────────────────────────────
 
-function TopicsSection({ navigate }: { navigate: NavFn }) {
+function TopicsSection({ topics, navigate }: { topics: { name: string; count: number }[]; navigate: NavFn }) {
   const [active, setActive] = useState<string | null>(null)
+  if (topics.length === 0) return null
+
   return (
     <section style={{ padding: '96px 0', borderBottom: '1px solid var(--border)' }}>
       <div style={WRAP}>
@@ -453,10 +481,10 @@ function TopicsSection({ navigate }: { navigate: NavFn }) {
           </p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 2 }}>
-          {TOPICS.map(t => (
+          {topics.map(t => (
             <button
               key={t.name}
-              onClick={() => { setActive(active === t.name ? null : t.name); navigate('explore') }}
+              onClick={() => { setActive(active === t.name ? null : t.name); navigate('explore', undefined, t.name) }}
               onMouseEnter={e => { if (active !== t.name) e.currentTarget.style.background = 'var(--surface)' }}
               onMouseLeave={e => { if (active !== t.name) e.currentTarget.style.background = 'transparent' }}
               style={{
@@ -466,7 +494,7 @@ function TopicsSection({ navigate }: { navigate: NavFn }) {
               }}
             >
               <div style={{ fontFamily: 'var(--font-serif)', fontSize: 17, fontWeight: 600, color: active === t.name ? 'var(--paper)' : 'var(--ink)', marginBottom: 8 }}>
-                {t.name}
+                {formatTopicLabel(t.name)}
               </div>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: active === t.name ? 'var(--accent)' : 'var(--ink-3)', letterSpacing: '0.04em' }}>
                 {t.count} articles
@@ -482,7 +510,9 @@ function TopicsSection({ navigate }: { navigate: NavFn }) {
 // ─── Most Read ────────────────────────────────────────────────────────────────
 
 function MostReadSection({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
-  const ranked = articles.filter(a => a.mostRead).sort((a, b) => (a.mostRead ?? 9) - (b.mostRead ?? 9))
+  const ranked = getMostReadArticles(articles, 5)
+  if (ranked.length === 0) return null
+
   return (
     <section style={{ padding: '96px 0' }}>
       <div style={WRAP}>
@@ -552,10 +582,21 @@ function MostReadItem({ article, rank, navigate }: { article: Article; rank: num
 function NewsletterSection() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (email) setSubmitted(true)
+    setSubmitting(true)
+    setError('')
+    try {
+      await subscribeEmail(email)
+      setSubmitted(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not subscribe.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -593,17 +634,20 @@ function NewsletterSection() {
                   outline: 'none',
                 }}
               />
-              <button type="submit" style={{
-                background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
+              <button type="submit" disabled={submitting} style={{
+                background: 'var(--accent)', color: '#fff', border: 'none', cursor: submitting ? 'wait' : 'pointer',
                 fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em',
-                padding: '13px 24px', flexShrink: 0, transition: 'background 0.2s',
+                padding: '13px 24px', flexShrink: 0, transition: 'background 0.2s', opacity: submitting ? 0.7 : 1,
               }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-h)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
               >
-                SUBSCRIBE
+                {submitting ? 'SUBSCRIBING…' : 'SUBSCRIBE'}
               </button>
             </form>
+          )}
+          {error && (
+            <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: '#b42318', margin: '12px 0 0' }}>{error}</p>
           )}
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--ink-3)', margin: '16px 0 0' }}>
             No spam. Only ideas worth thinking about. Unsubscribe anytime.
@@ -616,7 +660,57 @@ function NewsletterSection() {
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
-function Footer({ navigate }: { navigate: NavFn }) {
+function FooterSubscribe() {
+  const [email, setEmail] = useState('')
+  const [done, setDone] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      await subscribeEmail(email)
+      setDone(true)
+    } catch {
+      // ignore duplicate / transient errors in footer
+      setDone(true)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'rgba(237,233,225,0.7)', margin: 0 }}>
+        You are subscribed. Thank you.
+      </p>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Your email"
+        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', padding: '10px 14px', fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--paper)', outline: 'none' }}
+      />
+      <button
+        type="submit"
+        disabled={submitting}
+        style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: submitting ? 'wait' : 'pointer', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', padding: '11px 0', transition: 'background 0.2s', opacity: submitting ? 0.7 : 1 }}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-h)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
+      >
+        {submitting ? 'SUBSCRIBING…' : 'SUBSCRIBE'}
+      </button>
+    </form>
+  )
+}
+
+function Footer({ navigate, topics }: { navigate: NavFn; topics: { name: string; count: number }[] }) {
   return (
     <footer style={{ background: 'var(--ink)', color: 'var(--paper)', padding: '72px 0 40px' }}>
       <div style={WRAP}>
@@ -660,12 +754,12 @@ function Footer({ navigate }: { navigate: NavFn }) {
           <div>
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--accent)', marginBottom: 20 }}>TOPICS</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {TOPICS.slice(0, 6).map(t => (
-                <button key={t.name} onClick={() => navigate('explore')} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'var(--font-sans)', fontSize: 13, color: 'rgba(237,233,225,0.6)', transition: 'color 0.2s' }}
+              {topics.slice(0, 6).map(t => (
+                <button key={t.name} onClick={() => navigate('explore', undefined, t.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'var(--font-sans)', fontSize: 13, color: 'rgba(237,233,225,0.6)', transition: 'color 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.color = 'var(--paper)'}
                   onMouseLeave={e => e.currentTarget.style.color = 'rgba(237,233,225,0.6)'}
                 >
-                  {t.name}
+                  {formatTopicLabel(t.name)}
                 </button>
               ))}
             </div>
@@ -677,15 +771,7 @@ function Footer({ navigate }: { navigate: NavFn }) {
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.65, color: 'rgba(237,233,225,0.5)', margin: '0 0 20px' }}>
               Ideas worth thinking about, in your inbox.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input type="email" placeholder="Your email" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', padding: '10px 14px', fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--paper)', outline: 'none' }} />
-              <button style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', padding: '11px 0', transition: 'background 0.2s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-h)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
-              >
-                SUBSCRIBE
-              </button>
-            </div>
+            <FooterSubscribe />
           </div>
         </div>
 
@@ -704,7 +790,7 @@ function Footer({ navigate }: { navigate: NavFn }) {
 
 // ─── Home Page ────────────────────────────────────────────────────────────────
 
-function HomePage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
+function HomePage({ articles, topics, navigate }: { articles: Article[]; topics: { name: string; count: number }[]; navigate: NavFn }) {
   if (articles.length === 0) return null
   return (
     <main style={{ paddingTop: 92 }}>
@@ -712,7 +798,7 @@ function HomePage({ articles, navigate }: { articles: Article[]; navigate: NavFn
       <FeaturedSection article={articles[0]} navigate={navigate} />
       <LatestSection articles={articles} navigate={navigate} />
       <ThinkingSection />
-      <TopicsSection navigate={navigate} />
+      <TopicsSection topics={topics} navigate={navigate} />
       <MostReadSection articles={articles} navigate={navigate} />
       <NewsletterSection />
     </main>
@@ -721,9 +807,42 @@ function HomePage({ articles, navigate }: { articles: Article[]; navigate: NavFn
 
 // ─── Article Page ─────────────────────────────────────────────────────────────
 
-function ArticlePage({ article, articles, navigate }: { article: Article; articles: Article[]; navigate: NavFn }) {
+function ArticlePage({
+  article,
+  articles,
+  navigate,
+  onEdit,
+  onDeleted,
+}: {
+  article: Article
+  articles: Article[]
+  navigate: NavFn
+  onEdit: (article: Article) => void
+  onDeleted: (articleId: string) => void
+}) {
+  const { session } = useAuth()
   const [progress, setProgress] = useState(0)
+  const [deleting, setDeleting] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const isOwner = Boolean(session?.user.id && article.authorId && session.user.id === article.authorId)
+
+  useEffect(() => {
+    if (isRealArticle(article)) {
+      void incrementArticleRead(article.id)
+    }
+  }, [article.id])
+
+  async function handleDelete() {
+    if (!window.confirm('Delete this article permanently? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      await deleteArticle(article.id)
+      onDeleted(article.id)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not delete article.')
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     const fn = () => {
@@ -758,7 +877,10 @@ function ArticlePage({ article, articles, navigate }: { article: Article; articl
         </button>
 
         <div style={{ maxWidth: 780, margin: '0 auto' }}>
-          <CategoryLabel label={article.category} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+            <CategoryLabel label={article.category} />
+            <NewBadge createdAt={article.createdAt} />
+          </div>
 
           <h1 style={{
             fontFamily: 'var(--font-serif)', fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 700,
@@ -779,8 +901,27 @@ function ArticlePage({ article, articles, navigate }: { article: Article; articl
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{article.author}</div>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--ink-3)' }}>{article.date} · {article.readTime}</div>
             </div>
-            {/* Share */}
-            <div style={{ display: 'flex', gap: 8 }}>
+            {/* Share + owner actions */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {isOwner && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(article)}
+                    style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, color: 'var(--ink-3)', padding: '7px 12px', letterSpacing: '0.04em' }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={deleting}
+                    style={{ background: 'none', border: '1px solid #b42318', cursor: deleting ? 'wait' : 'pointer', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, color: '#b42318', padding: '7px 12px', letterSpacing: '0.04em', opacity: deleting ? 0.7 : 1 }}
+                  >
+                    {deleting ? 'Deleting…' : 'Delete'}
+                  </button>
+                </>
+              )}
               {['Share', 'Copy link'].map(label => (
                 <button key={label} style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, color: 'var(--ink-3)', padding: '7px 12px', letterSpacing: '0.04em', transition: 'border-color 0.2s, color 0.2s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
@@ -1013,12 +1154,26 @@ function AboutPage({ articles, navigate }: { articles: Article[]; navigate: NavF
 
 // ─── Explore Page ─────────────────────────────────────────────────────────────
 
-function ExplorePage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
+function ExplorePage({
+  articles,
+  topics,
+  navigate,
+  initialTopic,
+}: {
+  articles: Article[]
+  topics: { name: string; count: number }[]
+  navigate: NavFn
+  initialTopic: string | null
+}) {
   const [search, setSearch] = useState('')
-  const [activeTopic, setActiveTopic] = useState<string | null>(null)
+  const [activeTopic, setActiveTopic] = useState<string | null>(initialTopic)
+
+  useEffect(() => {
+    setActiveTopic(initialTopic)
+  }, [initialTopic])
 
   const filtered = articles.filter(a => {
-    const matchesTopic = !activeTopic || a.category.toLowerCase().includes(activeTopic.toLowerCase())
+    const matchesTopic = !activeTopic || categoryMatchesTopic(a.category, activeTopic)
     const matchesSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.excerpt.toLowerCase().includes(search.toLowerCase())
     return matchesTopic && matchesSearch
   })
@@ -1071,7 +1226,7 @@ function ExplorePage({ articles, navigate }: { articles: Article[]; navigate: Na
             >
               All
             </button>
-            {TOPICS.map(t => (
+            {topics.map(t => (
               <button key={t.name} onClick={() => setActiveTopic(activeTopic === t.name ? null : t.name)} style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: '18px 20px',
                 fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500, letterSpacing: '0.04em',
@@ -1079,7 +1234,7 @@ function ExplorePage({ articles, navigate }: { articles: Article[]; navigate: Na
                 borderBottom: `2px solid ${activeTopic === t.name ? 'var(--accent)' : 'transparent'}`,
                 transition: 'color 0.2s, border-color 0.2s', whiteSpace: 'nowrap',
               }}>
-                {t.name}
+                {formatTopicLabel(t.name)}
               </button>
             ))}
           </div>
@@ -1091,7 +1246,7 @@ function ExplorePage({ articles, navigate }: { articles: Article[]; navigate: Na
         <div style={WRAP}>
           <div style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--ink-3)', marginBottom: 40, letterSpacing: '0.04em' }}>
             {filtered.length} {filtered.length === 1 ? 'article' : 'articles'}
-            {activeTopic ? ` in ${activeTopic}` : ''}
+            {activeTopic ? ` in ${formatTopicLabel(activeTopic)}` : ''}
             {search ? ` matching "${search}"` : ''}
           </div>
 
@@ -1128,9 +1283,17 @@ export default function App() {
   const [article, setArticle] = useState<Article>(FALLBACK_ARTICLES[0])
   const [dark, setDark] = useState(false)
   const [loadingArticles, setLoadingArticles] = useState(isApiConfigured())
+  const [publishSuccess, setPublishSuccess] = useState<Article | null>(null)
+  const [exploreTopic, setExploreTopic] = useState<string | null>(null)
+  const [editingArticle, setEditingArticle] = useState<Article | null>(null)
 
-  function navigate(p: Page, a?: Article) {
+  const displayArticles = preferDatabaseArticles(articles)
+  const topics = buildTopicCounts(displayArticles)
+
+  function navigate(p: Page, a?: Article, topic?: string) {
     if (a) setArticle(a)
+    if (topic !== undefined) setExploreTopic(topic || null)
+    setEditingArticle(null)
     setPage(p)
     window.scrollTo({ top: 0 })
   }
@@ -1138,6 +1301,27 @@ export default function App() {
   function handlePublished(newArticle: Article) {
     setArticles((current) => [newArticle, ...current.filter((item) => item.id !== newArticle.id)])
     setArticle(newArticle)
+    setPublishSuccess(newArticle)
+    setEditingArticle(null)
+  }
+
+  function handleUpdated(updated: Article) {
+    setArticles((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    setArticle(updated)
+    setEditingArticle(null)
+  }
+
+  function handleEdit(target: Article) {
+    setEditingArticle(target)
+    setPage('publish')
+    window.scrollTo({ top: 0 })
+  }
+
+  function handleDeleted(articleId: string) {
+    setArticles((current) => current.filter((item) => item.id !== articleId))
+    setEditingArticle(null)
+    setPage('home')
+    window.scrollTo({ top: 0 })
   }
 
   useEffect(() => {
@@ -1148,8 +1332,12 @@ export default function App() {
       .then((loaded) => {
         if (cancelled) return
         if (loaded.length > 0) {
-          setArticles(loaded)
-          setArticle(loaded[0])
+          const real = preferDatabaseArticles(loaded)
+          setArticles(real)
+          setArticle(real[0])
+        } else {
+          setArticles(FALLBACK_ARTICLES)
+          setArticle(FALLBACK_ARTICLES[0])
         }
       })
       .catch(() => {
@@ -1174,6 +1362,15 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' }}>
       <EmailVerifiedBanner />
+      <PublishSuccessBanner
+        article={publishSuccess}
+        onView={() => {
+          if (!publishSuccess) return
+          navigate('article', publishSuccess)
+          setPublishSuccess(null)
+        }}
+        onDismiss={() => setPublishSuccess(null)}
+      />
       <Nav page={page} navigate={navigate} dark={dark} setDark={setDark} />
       {loadingArticles && page === 'home' ? (
         <main style={{ paddingTop: 120, textAlign: 'center', fontFamily: 'var(--font-sans)', color: 'var(--ink-3)' }}>
@@ -1181,15 +1378,38 @@ export default function App() {
         </main>
       ) : (
         <>
-          {page === 'home' && <HomePage articles={articles} navigate={navigate} />}
-          {page === 'article' && <ArticlePage article={article} articles={articles} navigate={navigate} />}
-          {page === 'about' && <AboutPage articles={articles} navigate={navigate} />}
-          {page === 'explore' && <ExplorePage articles={articles} navigate={navigate} />}
-          {page === 'publish' && <PublishPage navigate={navigate} onPublished={handlePublished} />}
+          {page === 'home' && <HomePage articles={displayArticles} topics={topics} navigate={navigate} />}
+          {page === 'article' && (
+            <ArticlePage
+              article={article}
+              articles={displayArticles}
+              navigate={navigate}
+              onEdit={handleEdit}
+              onDeleted={handleDeleted}
+            />
+          )}
+          {page === 'about' && <AboutPage articles={displayArticles} navigate={navigate} />}
+          {page === 'explore' && (
+            <ExplorePage
+              articles={displayArticles}
+              topics={topics}
+              navigate={navigate}
+              initialTopic={exploreTopic}
+            />
+          )}
+          {page === 'publish' && (
+            <PublishPage
+              navigate={navigate}
+              onPublished={handlePublished}
+              editingArticle={editingArticle}
+              onUpdated={handleUpdated}
+              onCancelEdit={() => setEditingArticle(null)}
+            />
+          )}
           {page === 'profile' && <ProfilePage navigate={navigate} />}
         </>
       )}
-      {page !== 'article' && <Footer navigate={navigate} />}
+      {page !== 'article' && <Footer navigate={navigate} topics={topics} />}
       {page === 'article' && (
         <div style={{ background: 'var(--ink)', padding: '40px 0' }}>
           <div style={{ ...WRAP, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

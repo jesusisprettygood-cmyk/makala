@@ -9,7 +9,19 @@ export interface Article {
   date: string
   readTime: string
   image: string
+  createdAt?: string
+  authorId?: string | null
   mostRead?: number
+}
+
+const NEW_ARTICLE_DAYS = 7
+
+export function isNewArticle(createdAt?: string): boolean {
+  if (!createdAt) return false
+  const created = new Date(createdAt).getTime()
+  if (Number.isNaN(created)) return false
+  const ageMs = Date.now() - created
+  return ageMs >= 0 && ageMs <= NEW_ARTICLE_DAYS * 24 * 60 * 60 * 1000
 }
 
 export interface ArticleRow {
@@ -53,7 +65,38 @@ export function mapRowToArticle(row: ArticleRow): Article {
     date: formatArticleDate(row.created_at),
     readTime: calcReadTime(row.body),
     image: row.image,
+    createdAt: row.created_at,
+    authorId: row.author_id,
     mostRead: row.most_read ?? undefined,
+  }
+}
+
+export function normalizeArticleRow(row: Record<string, unknown>): ArticleRow {
+  let body: string[] = []
+  if (Array.isArray(row.body)) {
+    body = row.body.map(String)
+  } else if (typeof row.body === 'string') {
+    try {
+      const parsed = JSON.parse(row.body) as unknown
+      body = Array.isArray(parsed) ? parsed.map(String) : [row.body]
+    } catch {
+      body = [row.body]
+    }
+  }
+
+  return {
+    id: String(row.id),
+    category: String(row.category ?? ''),
+    title: String(row.title ?? ''),
+    subtitle: String(row.subtitle ?? ''),
+    excerpt: String(row.excerpt ?? ''),
+    body,
+    author: String(row.author ?? 'Ndomi'),
+    image: String(row.image ?? ''),
+    most_read: typeof row.most_read === 'number' ? row.most_read : null,
+    author_id: row.author_id ? String(row.author_id) : null,
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
   }
 }
 

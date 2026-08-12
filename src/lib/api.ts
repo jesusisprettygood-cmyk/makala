@@ -1,6 +1,6 @@
 import type { ArticleRow, CreateArticlePayload } from '../types/article'
 import { mapRowToArticle, type Article } from '../types/article'
-import { createArticleDirect } from './articles'
+import { createArticleDirect, fetchArticlesDirect, updateArticleDirect, deleteArticleDirect } from './articles'
 import { fetchProfileDirect, updateProfileDirect } from './profile'
 
 const API_URL = normalizeApiUrl(import.meta.env.VITE_API_URL ?? '')
@@ -63,6 +63,15 @@ export function isApiConfigured(): boolean {
 }
 
 export async function fetchArticles(): Promise<Article[]> {
+  if (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    try {
+      const direct = await fetchArticlesDirect()
+      if (direct.length > 0) return direct
+    } catch {
+      // fall back to backend API
+    }
+  }
+
   const res = await apiFetch(`${apiBase()}/articles`)
   if (!res.ok) {
     throw new Error(`Failed to load articles (${res.status})`)
@@ -73,6 +82,14 @@ export async function fetchArticles(): Promise<Article[]> {
 
 export async function createArticle(payload: CreateArticlePayload): Promise<Article> {
   return createArticleDirect(payload)
+}
+
+export async function updateArticle(articleId: string, payload: CreateArticlePayload): Promise<Article> {
+  return updateArticleDirect(articleId, payload)
+}
+
+export async function deleteArticle(articleId: string): Promise<void> {
+  return deleteArticleDirect(articleId)
 }
 
 export async function fetchProfile(): Promise<UserProfile> {

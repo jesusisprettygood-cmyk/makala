@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Article } from '../types/article'
-import { createArticle } from '../lib/api'
+import { createArticle, updateArticle } from '../lib/api'
 import { uploadArticleImage } from '../lib/uploads'
 import { useAuth } from '../lib/auth'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -20,11 +20,14 @@ const CATEGORIES = [
   'BUSINESS',
 ]
 
-type NavFn = (page: 'home' | 'article' | 'about' | 'explore' | 'publish' | 'profile', article?: Article) => void
+type NavFn = (page: 'home' | 'article' | 'about' | 'explore' | 'publish' | 'profile', article?: Article, topic?: string) => void
 
 interface PublishPageProps {
   navigate: NavFn
   onPublished: (article: Article) => void
+  editingArticle?: Article | null
+  onUpdated?: (article: Article) => void
+  onCancelEdit?: () => void
 }
 
 const fieldStyle = {
@@ -48,8 +51,15 @@ const labelStyle = {
   marginBottom: 8,
 } as const
 
-export default function PublishPage({ navigate, onPublished }: PublishPageProps) {
+export default function PublishPage({
+  navigate,
+  onPublished,
+  editingArticle = null,
+  onUpdated,
+  onCancelEdit,
+}: PublishPageProps) {
   const { ready, accessToken, session, profile, signOut } = useAuth()
+  const isEditing = Boolean(editingArticle)
 
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [authEmail, setAuthEmail] = useState('')
@@ -69,13 +79,25 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
   const [imageUploading, setImageUploading] = useState(false)
   const [publishError, setPublishError] = useState('')
   const [publishLoading, setPublishLoading] = useState(false)
-  const [published, setPublished] = useState<Article | null>(null)
 
   useEffect(() => {
     if (profile?.displayName) {
       setAuthor(profile.displayName)
     }
   }, [profile?.displayName])
+
+  useEffect(() => {
+    if (!editingArticle) return
+    setCategory(editingArticle.category)
+    setTitle(editingArticle.title)
+    setSubtitle(editingArticle.subtitle)
+    setExcerpt(editingArticle.excerpt)
+    setBody(editingArticle.body.join('\n\n'))
+    setAuthor(editingArticle.author)
+    setImage(editingArticle.image)
+    setImagePreview(editingArticle.image || null)
+    setPublishError('')
+  }, [editingArticle])
 
   async function handleAuth(e: FormEvent) {
     e.preventDefault()
@@ -135,11 +157,16 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
     setPublishLoading(true)
 
     try {
-      const article = await createArticle({
-        category, title, subtitle, excerpt, body, author, image,
-      })
-      setPublished(article)
+      const payload = { category, title, subtitle, excerpt, body, author, image }
+      if (isEditing && editingArticle) {
+        const updated = await updateArticle(editingArticle.id, payload)
+        onUpdated?.(updated)
+        navigate('article', updated)
+        return
+      }
+      const article = await createArticle(payload)
       onPublished(article)
+      navigate('article', article)
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Failed to publish article.')
     } finally {
@@ -169,38 +196,6 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
     )
   }
 
-  if (published) {
-    return (
-      <main style={{ paddingTop: 120, paddingBottom: 80 }}>
-        <div style={{ ...WRAP, maxWidth: 640 }}>
-          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--accent)' }}>
-            PUBLISHED
-          </span>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(28px, 4vw, 40px)', margin: '16px 0' }}>
-            {published.title}
-          </h1>
-          <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--ink-2)', lineHeight: 1.7, marginBottom: 32 }}>
-            Your article is live on Tafakuri.
-          </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => navigate('article', published)}
-              style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', padding: '12px 24px', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em' }}
-            >
-              VIEW ARTICLE
-            </button>
-            <button
-              onClick={() => { setPublished(null); setTitle(''); setSubtitle(''); setExcerpt(''); setBody(''); setImage(''); setImagePreview(null) }}
-              style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '12px 24px', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}
-            >
-              WRITE ANOTHER
-            </button>
-          </div>
-        </div>
-      </main>
-    )
-  }
-
   return (
     <main style={{ paddingTop: 96, paddingBottom: 96 }}>
       <div style={WRAP}>
@@ -210,11 +205,25 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
               FOR WRITERS
             </span>
             <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, margin: '12px 0 16px', color: 'var(--ink)' }}>
-              Publish a Tafakuri
+              {isEditing ? 'Edit your Tafakuri' : 'Publish a Tafakuri'}
             </h1>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: 16, lineHeight: 1.75, color: 'var(--ink-2)', margin: 0 }}>
-              Share a reflection, story, or idea worth thinking about. Sign in, write, and publish directly to the publication.
+              {isEditing
+                ? 'Update your article and save changes. Only you can edit this piece.'
+                : 'Share a reflection, story, or idea worth thinking about. Sign in, write, and publish directly to the publication.'}
             </p>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCancelEdit?.()
+                  if (editingArticle) navigate('article', editingArticle)
+                }}
+                style={{ marginTop: 16, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--accent)' }}
+              >
+                ← Back to article
+              </button>
+            )}
           </div>
 
           {!accessToken ? (
@@ -315,7 +324,7 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
                   disabled={publishLoading || imageUploading}
                   style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', padding: '16px 28px', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', opacity: publishLoading || imageUploading ? 0.7 : 1 }}
                 >
-                  {publishLoading ? 'PUBLISHING…' : 'PUBLISH ARTICLE'}
+                  {publishLoading ? (isEditing ? 'SAVING…' : 'PUBLISHING…') : isEditing ? 'SAVE CHANGES' : 'PUBLISH ARTICLE'}
                 </button>
               </form>
             </>
