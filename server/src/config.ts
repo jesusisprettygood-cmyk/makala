@@ -12,6 +12,7 @@ function requireEnv(name: string): string {
 export const SUPABASE_URL = requireEnv("SUPABASE_URL");
 export const SUPABASE_ANON_KEY = requireEnv("SUPABASE_ANON_KEY");
 export const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+export const SUPABASE_JWT_SECRET = env.SUPABASE_JWT_SECRET ?? "";
 export const PORT = Number(env.PORT ?? "3000");
 
 function normalizeOrigin(raw: string): string {

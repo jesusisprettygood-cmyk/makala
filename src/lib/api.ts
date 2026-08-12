@@ -62,43 +62,31 @@ export function isApiConfigured(): boolean {
   return import.meta.env.DEV || Boolean(API_URL)
 }
 
-async function freshAccessToken(forceRefresh = false): Promise<string> {
+async function freshAccessToken(): Promise<string> {
   if (!supabase) {
     throw new Error('Supabase is not configured.')
   }
 
-  if (forceRefresh) {
-    const { data, error } = await supabase.auth.refreshSession()
-    if (!error && data.session?.access_token) {
-      return data.session.access_token
-    }
-  }
-
-  const { data: userData, error: userError } = await supabase.auth.getUser()
-  if (userError || !userData.user) {
-    throw new Error('Please sign in again.')
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+  if (!refreshError && refreshed.session?.access_token) {
+    return refreshed.session.access_token
   }
 
   const { data: sessionData } = await supabase.auth.getSession()
   const session = sessionData.session
-  if (!session?.access_token) {
-    throw new Error('Please sign in again.')
-  }
-
-  const expiresAt = session.expires_at ?? 0
-  const now = Math.floor(Date.now() / 1000)
-  if (expiresAt - now < 120) {
-    const { data: refreshed, error } = await supabase.auth.refreshSession()
-    if (!error && refreshed.session?.access_token) {
-      return refreshed.session.access_token
+  if (session?.access_token) {
+    const expiresAt = session.expires_at ?? 0
+    const now = Math.floor(Date.now() / 1000)
+    if (expiresAt > now + 30) {
+      return session.access_token
     }
   }
 
-  return session.access_token
+  throw new Error('Session expired. Please sign out and sign in again.')
 }
 
-async function authHeaders(forceRefresh = false): Promise<Record<string, string>> {
-  const token = await freshAccessToken(forceRefresh)
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await freshAccessToken()
   return { Authorization: `Bearer ${token}` }
 }
 
@@ -109,10 +97,14 @@ async function authedFetch(
 ): Promise<Response> {
   const headers = {
     ...(init.headers as Record<string, string> | undefined),
-    ...(await authHeaders(retried)),
+    ...(await authHeaders()),
   }
   const res = await apiFetch(`${apiBase()}${path}`, { ...init, headers })
   if (res.status === 401 && !retried) {
+    const { error } = await supabase!.auth.refreshSession()
+    if (error) {
+      return res
+    }
     return authedFetch(path, init, true)
   }
   return res
