@@ -1,7 +1,7 @@
 import logoUrl from "../assets/tafakuri-logo.png"
 
 export default function BrandLogo({
-  height = 36,
+  height = 48,
   inverted = false,
 }: {
   height?: number
