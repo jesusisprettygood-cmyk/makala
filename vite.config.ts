@@ -14,7 +14,12 @@ export default defineConfig(({ mode }) => {
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
   return {
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    base:
+      mode === 'production'
+        ? '/'
+        : process.env.FIGMA_PUBLIC_URL
+          ? `${process.env.FIGMA_PUBLIC_URL}/`
+          : '/',
     build: {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,

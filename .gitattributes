@@ -147,3 +147,4 @@
 
 # Small web assets — regular git, not LFS (avoids LFS auth on push)
 public/**            -filter -diff -merge text
+src/assets/**        -filter -diff -merge text

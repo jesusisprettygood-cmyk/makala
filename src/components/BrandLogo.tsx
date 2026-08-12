@@ -1,3 +1,5 @@
+import logoUrl from "../assets/tafakuri-logo.png"
+
 export default function BrandLogo({
   height = 36,
   inverted = false,
@@ -7,7 +9,7 @@ export default function BrandLogo({
 }) {
   return (
     <img
-      src="/Tafakuri-logo.png"
+      src={logoUrl}
       alt="Tafakuri by Ndomi"
       style={{
         height,
