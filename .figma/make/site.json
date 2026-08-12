@@ -1,0 +1,10 @@
+{
+  "description": "A premium digital publication offering deep reflections and insightful articles on life, technology, and society for thoughtful, curious readers.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
