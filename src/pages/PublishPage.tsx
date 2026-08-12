@@ -130,15 +130,14 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
 
   async function handlePublish(e: FormEvent) {
     e.preventDefault()
-    if (!accessToken) return
+    if (!session) return
     setPublishError('')
     setPublishLoading(true)
 
     try {
-      const article = await createArticle(
-        { category, title, subtitle, excerpt, body, author, image },
-        accessToken,
-      )
+      const article = await createArticle({
+        category, title, subtitle, excerpt, body, author, image,
+      })
       setPublished(article)
       onPublished(article)
     } catch (err) {

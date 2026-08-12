@@ -47,7 +47,7 @@ export default function ProfilePage({ navigate }: ProfilePageProps) {
     );
   }
 
-  if (!accessToken || !profile) {
+  if (!session || !profile) {
     return (
       <main style={{ paddingTop: 120, paddingBottom: 80 }}>
         <div style={{ ...WRAP, maxWidth: 560, textAlign: "center" }}>
@@ -79,12 +79,12 @@ export default function ProfilePage({ navigate }: ProfilePageProps) {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    if (!accessToken) return;
+    if (!session) return;
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      await updateProfile({ displayName, bio }, accessToken);
+      await updateProfile({ displayName, bio });
       await refreshProfile();
       setMessage("Profile updated successfully.");
     } catch (err) {

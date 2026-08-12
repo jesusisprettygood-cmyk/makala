@@ -41,17 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const accessToken = session?.access_token ?? null;
 
   const refreshProfile = useCallback(async () => {
-    if (!accessToken) {
+    if (!session) {
       setProfile(null);
       return;
     }
     try {
-      const next = await fetchProfile(accessToken);
+      const next = await fetchProfile();
       setProfile(next);
     } catch {
       setProfile(null);
     }
-  }, [accessToken]);
+  }, [session]);
 
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut();
@@ -92,12 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!session) {
       setProfile(null);
       return;
     }
     refreshProfile();
-  }, [accessToken, refreshProfile]);
+  }, [session, refreshProfile]);
 
   const value = useMemo(
     () => ({

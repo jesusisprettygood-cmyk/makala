@@ -1,5 +1,6 @@
 import type { ArticleRow, CreateArticlePayload } from '../types/article'
 import { mapRowToArticle, type Article } from '../types/article'
+import { supabase } from './supabase'
 
 const API_URL = normalizeApiUrl(import.meta.env.VITE_API_URL ?? '')
 
@@ -61,6 +62,62 @@ export function isApiConfigured(): boolean {
   return import.meta.env.DEV || Boolean(API_URL)
 }
 
+async function freshAccessToken(forceRefresh = false): Promise<string> {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+
+  if (forceRefresh) {
+    const { data, error } = await supabase.auth.refreshSession()
+    if (!error && data.session?.access_token) {
+      return data.session.access_token
+    }
+  }
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData.user) {
+    throw new Error('Please sign in again.')
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession()
+  const session = sessionData.session
+  if (!session?.access_token) {
+    throw new Error('Please sign in again.')
+  }
+
+  const expiresAt = session.expires_at ?? 0
+  const now = Math.floor(Date.now() / 1000)
+  if (expiresAt - now < 120) {
+    const { data: refreshed, error } = await supabase.auth.refreshSession()
+    if (!error && refreshed.session?.access_token) {
+      return refreshed.session.access_token
+    }
+  }
+
+  return session.access_token
+}
+
+async function authHeaders(forceRefresh = false): Promise<Record<string, string>> {
+  const token = await freshAccessToken(forceRefresh)
+  return { Authorization: `Bearer ${token}` }
+}
+
+async function authedFetch(
+  path: string,
+  init: RequestInit,
+  retried = false,
+): Promise<Response> {
+  const headers = {
+    ...(init.headers as Record<string, string> | undefined),
+    ...(await authHeaders(retried)),
+  }
+  const res = await apiFetch(`${apiBase()}${path}`, { ...init, headers })
+  if (res.status === 401 && !retried) {
+    return authedFetch(path, init, true)
+  }
+  return res
+}
+
 export async function fetchArticles(): Promise<Article[]> {
   const res = await apiFetch(`${apiBase()}/articles`)
   if (!res.ok) {
@@ -70,15 +127,11 @@ export async function fetchArticles(): Promise<Article[]> {
   return (data.articles ?? []).map(mapRowToArticle)
 }
 
-export async function createArticle(
-  payload: CreateArticlePayload,
-  accessToken: string,
-): Promise<Article> {
-  const res = await apiFetch(`${apiBase()}/articles`, {
+export async function createArticle(payload: CreateArticlePayload): Promise<Article> {
+  const res = await authedFetch('/articles', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
   })
@@ -91,10 +144,8 @@ export async function createArticle(
   return mapRowToArticle(data.article!)
 }
 
-export async function fetchProfile(accessToken: string): Promise<UserProfile> {
-  const res = await apiFetch(`${apiBase()}/profile`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
+export async function fetchProfile(): Promise<UserProfile> {
+  const res = await authedFetch('/profile', {})
   const data = (await parseJsonResponse(res)) as { error?: string; profile?: UserProfile }
   if (!res.ok) {
     throw new Error(data.error ?? `Failed to load profile (${res.status})`)
@@ -102,15 +153,14 @@ export async function fetchProfile(accessToken: string): Promise<UserProfile> {
   return data.profile!
 }
 
-export async function updateProfile(
-  payload: { displayName?: string; bio?: string },
-  accessToken: string,
-): Promise<UserProfile> {
-  const res = await apiFetch(`${apiBase()}/profile`, {
+export async function updateProfile(payload: {
+  displayName?: string
+  bio?: string
+}): Promise<UserProfile> {
+  const res = await authedFetch('/profile', {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
   })
