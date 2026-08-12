@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Article } from '../types/article'
-import { createArticle, uploadArticleImage } from '../lib/api'
+import { createArticle } from '../lib/api'
+import { uploadArticleImage } from '../lib/uploads'
 import { useAuth } from '../lib/auth'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { getSiteUrl } from '../lib/siteUrl'
@@ -111,13 +112,13 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
   }
 
   async function handleImageSelect(file: File) {
-    if (!accessToken) return
+    if (!session?.user.id) return
     setImageUploading(true)
     setPublishError('')
     const localPreview = URL.createObjectURL(file)
     setImagePreview(localPreview)
     try {
-      const url = await uploadArticleImage(file, accessToken)
+      const url = await uploadArticleImage(file, session.user.id)
       setImage(url)
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Failed to upload image.')

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../lib/auth";
-import { updateProfile, uploadProfilePhoto } from "../lib/api";
+import { updateProfile } from "../lib/api";
+import { uploadProfilePhoto } from "../lib/uploads";
 import ImageUploadField from "../components/ImageUploadField";
 
 const WRAP = { maxWidth: 1200, margin: "0 auto", padding: "0 24px" } as const;
@@ -23,7 +24,7 @@ const fieldStyle = {
 } as const;
 
 export default function ProfilePage({ navigate }: ProfilePageProps) {
-  const { ready, accessToken, profile, refreshProfile, signOut } = useAuth();
+  const { ready, accessToken, session, profile, refreshProfile, signOut } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [saving, setSaving] = useState(false);
@@ -94,12 +95,12 @@ export default function ProfilePage({ navigate }: ProfilePageProps) {
   }
 
   async function handlePhoto(file: File) {
-    if (!accessToken) return;
+    if (!session?.user.id) return;
     setUploadingPhoto(true);
     setError("");
     setMessage("");
     try {
-      await uploadProfilePhoto(file, accessToken);
+      await uploadProfilePhoto(file, session.user.id);
       await refreshProfile();
       setMessage("Profile photo updated.");
     } catch (err) {

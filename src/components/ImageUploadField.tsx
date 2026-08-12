@@ -17,7 +17,7 @@ export default function ImageUploadField({
   previewUrl,
   uploading = false,
   error,
-  hint = "JPEG, PNG, or WebP · max 50 MB · converted to lightweight WebP",
+  hint = "JPEG or PNG · auto-compressed to lightweight WebP",
 }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localError, setLocalError] = useState("");

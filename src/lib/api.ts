@@ -35,6 +35,10 @@ async function parseJsonResponse(res: Response): Promise<unknown> {
 }
 
 function apiBase(): string {
+  // Local dev uses Vite proxy → same origin, no CORS issues.
+  if (import.meta.env.DEV) {
+    return '/api'
+  }
   if (!API_URL) {
     throw new Error('VITE_API_URL is not configured.')
   }
@@ -46,13 +50,15 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
     return await fetch(input, init)
   } catch {
     throw new Error(
-      'Network error — could not reach the API. Check VITE_API_URL and backend CORS_ORIGINS / FRONTEND_URL on Railway.',
+      import.meta.env.DEV
+        ? 'Network error — could not reach the API. Set VITE_API_URL in .env to your Railway backend (https://makala-production.up.railway.app) and restart the dev server.'
+        : 'Network error — could not reach the API. Check VITE_API_URL and backend CORS_ORIGINS / FRONTEND_URL on Railway.',
     )
   }
 }
 
 export function isApiConfigured(): boolean {
-  return Boolean(API_URL)
+  return import.meta.env.DEV || Boolean(API_URL)
 }
 
 export async function fetchArticles(): Promise<Article[]> {
@@ -113,34 +119,4 @@ export async function updateProfile(
     throw new Error(data.error ?? `Failed to update profile (${res.status})`)
   }
   return data.profile!
-}
-
-export async function uploadArticleImage(file: File, accessToken: string): Promise<string> {
-  const form = new FormData()
-  form.append('image', file)
-  const res = await apiFetch(`${apiBase()}/uploads/article-image`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  })
-  const data = (await parseJsonResponse(res)) as { error?: string; url?: string }
-  if (!res.ok) {
-    throw new Error(data.error ?? `Failed to upload image (${res.status})`)
-  }
-  return data.url!
-}
-
-export async function uploadProfilePhoto(file: File, accessToken: string): Promise<string> {
-  const form = new FormData()
-  form.append('photo', file)
-  const res = await apiFetch(`${apiBase()}/uploads/profile-photo`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  })
-  const data = (await parseJsonResponse(res)) as { error?: string; url?: string }
-  if (!res.ok) {
-    throw new Error(data.error ?? `Failed to upload photo (${res.status})`)
-  }
-  return data.url!
 }
