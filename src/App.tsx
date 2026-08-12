@@ -1,170 +1,11 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
+import type { Article } from './types/article'
+import { FALLBACK_ARTICLES } from './data/fallbackArticles'
+import { fetchArticles, isApiConfigured } from './lib/api'
+import PublishPage from './pages/PublishPage'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Article {
-  id: string
-  category: string
-  title: string
-  subtitle: string
-  excerpt: string
-  body: string[]
-  author: string
-  date: string
-  readTime: string
-  image: string
-  mostRead?: number
-}
-
-type Page = 'home' | 'article' | 'about' | 'explore'
+type Page = 'home' | 'article' | 'about' | 'explore' | 'publish'
 type NavFn = (page: Page, article?: Article) => void
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const ARTICLES: Article[] = [
-  {
-    id: '1',
-    category: 'LIFE',
-    title: 'Why We Sometimes Run From the Life We Once Prayed For',
-    subtitle: 'On the strange discomfort of arrival, and why getting what we wanted can feel so unsettling.',
-    excerpt: 'There is a peculiar kind of restlessness that appears not in the absence of good things, but in their very presence. We prepare all our lives for certain moments — and then, when they arrive, something in us pulls back.',
-    body: [
-      'There is a peculiar kind of restlessness that does not announce itself in the language of failure. It arrives quietly — in the midst of what we wanted, the life we worked for, the morning we once prayed for. And yet it whispers: is this it?',
-      'This is not ingratitude. At least, not entirely. It is something more complicated — a confrontation with the gap between the imagined life and the actual one. And that gap is always wider than expected.',
-      'We spend years building toward versions of ourselves. We imagine how we will feel when we get the job, move to the city, find the person, make the money. The imagination is specific and intoxicating. The reality, even when good, is different. It contains things the imagination never included: the ordinary Tuesday, the 3am doubt, the way life persists in being itself rather than a story.',
-      'PULLQUOTE:Sometimes the hardest thing is not finding an answer, but accepting the question.',
-      "What do we do with that gap? Most of us don't sit with it. We move — to the next goal, the next version, the next distraction. We treat restlessness as a navigation problem when it might actually be a perception problem.",
-      "The truth that few people say aloud: arrival is rarely what we imagined. Not because life fails us, but because we are always a different person by the time we get there. The self that prayed for this life is not the self living it. We grew. The map changed. The destination stayed the same.",
-      "Perhaps the more interesting question is not why we run, but what we are running toward. And whether that destination is truly ours — or borrowed from someone else's dream, someone else's definition of enough.",
-      "There is something in us that needs resistance. Without it, we don't know what to do with stillness. Arrival feels like stagnation to someone who only knows how to become.",
-      "The alternative — the uncomfortable one — is to learn how to stay. To practice being in what you have rather than always reaching for what you imagined. Not because wanting is wrong, but because wanting without presence is a way of living in the future while missing the present.",
-      'The life you once prayed for is still worth having. But having it requires a different skill than getting it.',
-    ],
-    author: 'Ndomi',
-    date: 'August 12, 2026',
-    readTime: '8 min read',
-    image: 'https://images.unsplash.com/photo-1472954253026-157558836cd2?w=1400&h=800&fit=crop&auto=format',
-    mostRead: 1,
-  },
-  {
-    id: '2',
-    category: 'TECHNOLOGY',
-    title: 'The Internet Changed How We Think',
-    subtitle: 'Not what we think about — but how we think. The shift is subtle and more significant than we realize.',
-    excerpt: 'We speak of the internet as a tool. But tools change the hand that holds them. After two decades of constant connectivity, the question is no longer what we use the internet for — it is what it has made of us.',
-    body: [
-      'We speak of the internet as though it is a tool — neutral, inert, shaped entirely by the hand that uses it. But tools change their users. The hammer changed the wrist. The car changed the body. The printing press changed how communities understood authority, identity, and truth.',
-      'The internet is changing how we think. Not what we think about. How.',
-      'PULLQUOTE:Attention has become the scarcest resource of the information age — and we spent it without accounting for the exchange rate.',
-      'We now think in interruptions. The unit of thought has shrunk. Deep reading — the kind that requires sustained attention and slow accumulation — has become harder, even for those who love it. Not because we became less intelligent, but because we restructured the environment that intelligence operates in.',
-      'What gets lost is not information. We have more of that than any generation in history. What gets lost is the capacity to sit with complexity — to hold an unresolved idea long enough for it to become something.',
-      'The question is not whether to use the internet. The question is whether we are using it consciously — or whether it is using us.',
-    ],
-    author: 'Ndomi',
-    date: 'July 28, 2026',
-    readTime: '6 min read',
-    image: 'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=1200&h=700&fit=crop&auto=format',
-    mostRead: 2,
-  },
-  {
-    id: '3',
-    category: 'YOUTH',
-    title: 'What Happens When Young People Stop Believing?',
-    subtitle: 'A generation told to work hard and dream big is learning — sometimes slowly, sometimes all at once — that the deal was never what it seemed.',
-    excerpt: 'The cynicism of youth is different from the cynicism of age. One is learned; the other is taught. What does it mean when an entire generation begins to suspect that the future promised to them was never actually available?',
-    body: [
-      "There is a particular kind of exhaustion that doesn't come from working too hard. It comes from working hard toward something and realizing — slowly, then all at once — that the rules may have changed, or may never have existed as described.",
-      'PULLQUOTE:A generation does not lose faith overnight. It loses it in small recognitions, one quiet disappointment at a time.',
-      "The question is not what happens when young people stop believing in institutions. That shift is well-documented. The more interesting question is what happens when young people stop believing in the story — the narrative that effort and aspiration reliably lead somewhere worth going.",
-    ],
-    author: 'Ndomi',
-    date: 'July 15, 2026',
-    readTime: '7 min read',
-    image: 'https://images.unsplash.com/photo-1701232664481-12a9b8ee5c32?w=1200&h=700&fit=crop&auto=format',
-    mostRead: 3,
-  },
-  {
-    id: '4',
-    category: 'LEADERSHIP',
-    title: "The Quiet Leadership Most Leaders Don't Understand",
-    subtitle: "Power doesn't always announce itself. The most effective kind rarely does.",
-    excerpt: "We have made leadership into a performance. A language. A set of behaviors we recognize from stages and business books. But some of the most significant leadership happens in silence — in the consistent, unglamorous work of building trust.",
-    body: [
-      'Leadership has been turned into a genre. It has its own conferences, vocabulary, and aesthetic. It is taught in business schools and performed on stages. And in many ways, that performance has become confused with the thing itself.',
-      'PULLQUOTE:The most influential leaders I have observed did not lead loudly. They led consistently.',
-      'Quiet leadership is not passive leadership. It is the discipline of building credibility over time, of doing what you said you would do, of making decisions that serve something larger than the moment.',
-    ],
-    author: 'Ndomi',
-    date: 'June 30, 2026',
-    readTime: '5 min read',
-    image: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=1200&h=700&fit=crop&auto=format',
-    mostRead: 4,
-  },
-  {
-    id: '5',
-    category: 'CREATIVITY',
-    title: "Creativity Isn't a Gift. It's a Practice.",
-    subtitle: 'On dismantling the mythology of inspiration and building something more useful in its place.',
-    excerpt: 'We have romanticized creativity into something almost useless — a mystical visitation that arrives uninvited and vanishes without warning. This story protects us from the harder truth: creativity is stubborn, daily work.',
-    body: [
-      'The myth of inspiration is one of the most seductive lies in creative life. It suggests that creativity is something that happens to you rather than something you do — that there is a special receptivity, a state of grace, from which work simply flows.',
-      'This is comforting and mostly false.',
-      'PULLQUOTE:The work produces the inspiration, not the other way around.',
-      "Creativity is a practice in the same way that strength is a practice. It is not what you are. It is what you do repeatedly, imperfectly, and with commitment even when you don't feel like it.",
-    ],
-    author: 'Ndomi',
-    date: 'June 18, 2026',
-    readTime: '6 min read',
-    image: 'https://images.unsplash.com/photo-1740855199933-66a8c12cc64a?w=1200&h=700&fit=crop&auto=format',
-    mostRead: 5,
-  },
-  {
-    id: '6',
-    category: 'LIFE',
-    title: 'Why We Are Always Busy but Rarely Present',
-    subtitle: 'The paradox of a generation that filled every hour and lost every moment.',
-    excerpt: 'We have confused movement with progress and busyness with purpose. Somewhere between the schedule and the to-do list, the present tense disappeared.',
-    body: [
-      "There is a kind of busyness that feels productive and is actually a form of hiding. We fill the hours because the alternative — stillness — asks questions we aren't ready to answer.",
-      'PULLQUOTE:We are the busiest generation in history and among the least present.',
-    ],
-    author: 'Ndomi',
-    date: 'June 5, 2026',
-    readTime: '5 min read',
-    image: 'https://images.unsplash.com/photo-1694028124386-0924de7457c0?w=1200&h=700&fit=crop&auto=format',
-  },
-  {
-    id: '7',
-    category: 'TECHNOLOGY',
-    title: 'Technology Is Not the Future. People Are.',
-    subtitle: 'Every meaningful technological shift in history has ultimately been a shift in human behavior, not machine capability.',
-    excerpt: 'We narrate the future as though it will be authored by algorithms. But technology has no agenda. It amplifies the agenda of the humans who build it, fund it, and use it.',
-    body: [
-      "The future is not a technology problem. It never has been. Every meaningful technological shift in history has ultimately been a shift in human behavior — in what people decided to value, build, and protect.",
-      'PULLQUOTE:Technology gives us capability. Culture determines what we do with it.',
-    ],
-    author: 'Ndomi',
-    date: 'May 22, 2026',
-    readTime: '7 min read',
-    image: 'https://images.unsplash.com/photo-1603224317910-1d6cd4022b4e?w=1200&h=700&fit=crop&auto=format',
-  },
-  {
-    id: '8',
-    category: 'PERSONAL REFLECTIONS',
-    title: 'The Things We Learn Too Late',
-    subtitle: 'Some knowledge only becomes visible in retrospect — and that might be the whole point.',
-    excerpt: 'Wisdom is annoying. Not because it is wrong, but because it almost always arrives after it would have been most useful. The older we get, the clearer the view of the territory we already crossed.',
-    body: [
-      "There is a category of knowledge that cannot be transmitted. You can read about heartbreak before you experience it. But the reading and the experiencing are categorically different things.",
-      'PULLQUOTE:Some things can only be learned by living through them. That is both the tragedy and the point.',
-    ],
-    author: 'Ndomi',
-    date: 'May 10, 2026',
-    readTime: '6 min read',
-    image: 'https://images.unsplash.com/photo-1523956468692-1e219561ea46?w=1200&h=700&fit=crop&auto=format',
-  },
-]
-
 const TOPICS = [
   { name: 'Life', count: 12 },
   { name: 'Technology', count: 8 },
@@ -272,6 +113,7 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
     { label: 'Home', p: 'home' },
     { label: 'Explore', p: 'explore' },
     { label: 'About', p: 'about' },
+    { label: 'Publish', p: 'publish' },
   ]
 
   return (
@@ -816,7 +658,7 @@ function Footer({ navigate }: { navigate: NavFn }) {
           <div>
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--accent)', marginBottom: 20 }}>NAVIGATE</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[['Home', 'home'], ['Explore', 'explore'], ['About', 'about']].map(([l, p]) => (
+              {[['Home', 'home'], ['Explore', 'explore'], ['About', 'about'], ['Publish', 'publish']].map(([l, p]) => (
                 <button key={p} onClick={() => navigate(p as Page)} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'var(--font-sans)', fontSize: 13, color: 'rgba(237,233,225,0.6)', transition: 'color 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.color = 'var(--paper)'}
                   onMouseLeave={e => e.currentTarget.style.color = 'rgba(237,233,225,0.6)'}
@@ -875,15 +717,16 @@ function Footer({ navigate }: { navigate: NavFn }) {
 
 // ─── Home Page ────────────────────────────────────────────────────────────────
 
-function HomePage({ navigate }: { navigate: NavFn }) {
+function HomePage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
+  if (articles.length === 0) return null
   return (
     <main style={{ paddingTop: 64 }}>
       <HeroSection navigate={navigate} />
-      <FeaturedSection article={ARTICLES[0]} navigate={navigate} />
-      <LatestSection articles={ARTICLES} navigate={navigate} />
+      <FeaturedSection article={articles[0]} navigate={navigate} />
+      <LatestSection articles={articles} navigate={navigate} />
       <ThinkingSection />
       <TopicsSection navigate={navigate} />
-      <MostReadSection articles={ARTICLES} navigate={navigate} />
+      <MostReadSection articles={articles} navigate={navigate} />
       <NewsletterSection />
     </main>
   )
@@ -891,7 +734,7 @@ function HomePage({ navigate }: { navigate: NavFn }) {
 
 // ─── Article Page ─────────────────────────────────────────────────────────────
 
-function ArticlePage({ article, navigate }: { article: Article; navigate: NavFn }) {
+function ArticlePage({ article, articles, navigate }: { article: Article; articles: Article[]; navigate: NavFn }) {
   const [progress, setProgress] = useState(0)
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -908,7 +751,7 @@ function ArticlePage({ article, navigate }: { article: Article; navigate: NavFn 
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
-  const related = ARTICLES.filter(a => a.id !== article.id).slice(0, 3)
+  const related = articles.filter(a => a.id !== article.id).slice(0, 3)
 
   return (
     <main style={{ paddingTop: 64 }}>
@@ -1079,7 +922,7 @@ function ArticlePage({ article, navigate }: { article: Article; navigate: NavFn 
 
 // ─── About Page ───────────────────────────────────────────────────────────────
 
-function AboutPage({ navigate }: { navigate: NavFn }) {
+function AboutPage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
   return (
     <main style={{ paddingTop: 64 }}>
       {/* Hero */}
@@ -1171,7 +1014,7 @@ function AboutPage({ navigate }: { navigate: NavFn }) {
         <div style={WRAP}>
           <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 28, fontWeight: 700, margin: '0 0 48px', color: 'var(--ink)' }}>Latest Writing</h2>
           <div className="r-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 36 }}>
-            {ARTICLES.slice(0, 3).map(a => <ArticleCard key={a.id} article={a} navigate={navigate} />)}
+            {articles.slice(0, 3).map(a => <ArticleCard key={a.id} article={a} navigate={navigate} />)}
           </div>
         </div>
       </section>
@@ -1183,11 +1026,11 @@ function AboutPage({ navigate }: { navigate: NavFn }) {
 
 // ─── Explore Page ─────────────────────────────────────────────────────────────
 
-function ExplorePage({ navigate }: { navigate: NavFn }) {
+function ExplorePage({ articles, navigate }: { articles: Article[]; navigate: NavFn }) {
   const [search, setSearch] = useState('')
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
 
-  const filtered = ARTICLES.filter(a => {
+  const filtered = articles.filter(a => {
     const matchesTopic = !activeTopic || a.category.toLowerCase().includes(activeTopic.toLowerCase())
     const matchesSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.excerpt.toLowerCase().includes(search.toLowerCase())
     return matchesTopic && matchesSearch
@@ -1294,14 +1137,48 @@ function ExplorePage({ navigate }: { navigate: NavFn }) {
 
 export default function App() {
   const [page, setPage] = useState<Page>('home')
-  const [article, setArticle] = useState<Article>(ARTICLES[0])
+  const [articles, setArticles] = useState<Article[]>(FALLBACK_ARTICLES)
+  const [article, setArticle] = useState<Article>(FALLBACK_ARTICLES[0])
   const [dark, setDark] = useState(false)
+  const [loadingArticles, setLoadingArticles] = useState(isApiConfigured())
 
   function navigate(p: Page, a?: Article) {
     if (a) setArticle(a)
     setPage(p)
     window.scrollTo({ top: 0 })
   }
+
+  function handlePublished(newArticle: Article) {
+    setArticles((current) => [newArticle, ...current.filter((item) => item.id !== newArticle.id)])
+    setArticle(newArticle)
+  }
+
+  useEffect(() => {
+    if (!isApiConfigured()) return
+
+    let cancelled = false
+    fetchArticles()
+      .then((loaded) => {
+        if (cancelled) return
+        if (loaded.length > 0) {
+          setArticles(loaded)
+          setArticle(loaded[0])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setArticles(FALLBACK_ARTICLES)
+          setArticle(FALLBACK_ARTICLES[0])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingArticles(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -1310,10 +1187,19 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' }}>
       <Nav page={page} navigate={navigate} dark={dark} setDark={setDark} />
-      {page === 'home' && <HomePage navigate={navigate} />}
-      {page === 'article' && <ArticlePage article={article} navigate={navigate} />}
-      {page === 'about' && <AboutPage navigate={navigate} />}
-      {page === 'explore' && <ExplorePage navigate={navigate} />}
+      {loadingArticles && page === 'home' ? (
+        <main style={{ paddingTop: 120, textAlign: 'center', fontFamily: 'var(--font-sans)', color: 'var(--ink-3)' }}>
+          Loading articles…
+        </main>
+      ) : (
+        <>
+          {page === 'home' && <HomePage articles={articles} navigate={navigate} />}
+          {page === 'article' && <ArticlePage article={article} articles={articles} navigate={navigate} />}
+          {page === 'about' && <AboutPage articles={articles} navigate={navigate} />}
+          {page === 'explore' && <ExplorePage articles={articles} navigate={navigate} />}
+          {page === 'publish' && <PublishPage navigate={navigate} onPublished={handlePublished} />}
+        </>
+      )}
       {page !== 'article' && <Footer navigate={navigate} />}
       {page === 'article' && (
         <div style={{ background: 'var(--ink)', padding: '40px 0' }}>
