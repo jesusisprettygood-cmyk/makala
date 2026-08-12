@@ -3,10 +3,12 @@ import type { Article } from './types/article'
 import { FALLBACK_ARTICLES } from './data/fallbackArticles'
 import { fetchArticles, isApiConfigured } from './lib/api'
 import PublishPage from './pages/PublishPage'
+import ProfilePage from './pages/ProfilePage'
 import BrandLogo from './components/BrandLogo'
-import { supabase } from './lib/supabase'
+import UserMenu from './components/UserMenu'
+import EmailVerifiedBanner from './components/EmailVerifiedBanner'
 
-type Page = 'home' | 'article' | 'about' | 'explore' | 'publish'
+type Page = 'home' | 'article' | 'about' | 'explore' | 'publish' | 'profile'
 type NavFn = (page: Page, article?: Article) => void
 const TOPICS = [
   { name: 'Life', count: 12 },
@@ -159,16 +161,9 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
               )}
             </button>
 
-            <button className="hidden md:block" style={{
-              background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em',
-              padding: '9px 18px',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-h)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'var(--accent)')}
-            >
-              SUBSCRIBE
-            </button>
+            <div className="hidden md:block">
+              <UserMenu navigate={navigate} />
+            </div>
 
             <button className="md:hidden" onClick={() => setMenuOpen(true)} aria-label="Menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink)', padding: 4, display: 'flex' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -199,13 +194,9 @@ function Nav({ page, navigate, dark, setDark }: { page: Page; navigate: NavFn; d
                 </button>
               ))}
             </nav>
-            <button style={{
-              marginTop: 36, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em',
-              padding: '13px 20px',
-            }}>
-              SUBSCRIBE
-            </button>
+            <div style={{ marginTop: 36 }}>
+              <UserMenu navigate={navigate} compact />
+            </div>
           </div>
         </div>
       )}
@@ -1150,17 +1141,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!supabase) return
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session && window.location.hash.includes('access_token')) {
-        window.history.replaceState({}, '', window.location.pathname)
-        setPage('publish')
-      }
-    })
-  }, [])
-
-  useEffect(() => {
     if (!isApiConfigured()) return
 
     let cancelled = false
@@ -1193,6 +1173,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' }}>
+      <EmailVerifiedBanner />
       <Nav page={page} navigate={navigate} dark={dark} setDark={setDark} />
       {loadingArticles && page === 'home' ? (
         <main style={{ paddingTop: 120, textAlign: 'center', fontFamily: 'var(--font-sans)', color: 'var(--ink-3)' }}>
@@ -1205,6 +1186,7 @@ export default function App() {
           {page === 'about' && <AboutPage articles={articles} navigate={navigate} />}
           {page === 'explore' && <ExplorePage articles={articles} navigate={navigate} />}
           {page === 'publish' && <PublishPage navigate={navigate} onPublished={handlePublished} />}
+          {page === 'profile' && <ProfilePage navigate={navigate} />}
         </>
       )}
       {page !== 'article' && <Footer navigate={navigate} />}

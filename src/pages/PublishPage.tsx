@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Article } from '../types/article'
-import { createArticle } from '../lib/api'
+import { createArticle, uploadArticleImage } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { getSiteUrl } from '../lib/siteUrl'
+import ImageUploadField from '../components/ImageUploadField'
 
 const WRAP = { maxWidth: 1200, margin: '0 auto', padding: '0 24px' } as const
 
@@ -17,7 +19,7 @@ const CATEGORIES = [
   'BUSINESS',
 ]
 
-type NavFn = (page: 'home' | 'article' | 'about' | 'explore' | 'publish', article?: Article) => void
+type NavFn = (page: 'home' | 'article' | 'about' | 'explore' | 'publish' | 'profile', article?: Article) => void
 
 interface PublishPageProps {
   navigate: NavFn
@@ -46,13 +48,13 @@ const labelStyle = {
 } as const
 
 export default function PublishPage({ navigate, onPublished }: PublishPageProps) {
-  const [sessionReady, setSessionReady] = useState(false)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const { ready, accessToken, session, profile, signOut } = useAuth()
+
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
 
   const [category, setCategory] = useState(CATEGORIES[0])
@@ -62,34 +64,23 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
   const [body, setBody] = useState('')
   const [author, setAuthor] = useState('Ndomi')
   const [image, setImage] = useState('')
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageUploading, setImageUploading] = useState(false)
   const [publishError, setPublishError] = useState('')
   const [publishLoading, setPublishLoading] = useState(false)
   const [published, setPublished] = useState<Article | null>(null)
 
   useEffect(() => {
-    if (!supabase) {
-      setSessionReady(true)
-      return
+    if (profile?.displayName) {
+      setAuthor(profile.displayName)
     }
-
-    supabase.auth.getSession().then(({ data }) => {
-      setAccessToken(data.session?.access_token ?? null)
-      setUserEmail(data.session?.user.email ?? null)
-      setSessionReady(true)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAccessToken(session?.access_token ?? null)
-      setUserEmail(session?.user.email ?? null)
-    })
-
-    return () => listener.subscription.unsubscribe()
-  }, [])
+  }, [profile?.displayName])
 
   async function handleAuth(e: FormEvent) {
     e.preventDefault()
     if (!supabase) return
     setAuthError('')
+    setAuthSuccess('')
     setAuthLoading(true)
 
     try {
@@ -106,7 +97,9 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
 
       if (result.error) throw result.error
       if (!result.data.session && authMode === 'signup') {
-        setAuthError('Account created. Check your email to confirm, then sign in.')
+        setAuthSuccess(
+          'Account created successfully! Check your email for a confirmation link, then sign in.',
+        )
         setAuthMode('signin')
         return
       }
@@ -114,6 +107,23 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
       setAuthError(err instanceof Error ? err.message : 'Authentication failed.')
     } finally {
       setAuthLoading(false)
+    }
+  }
+
+  async function handleImageSelect(file: File) {
+    if (!accessToken) return
+    setImageUploading(true)
+    setPublishError('')
+    const localPreview = URL.createObjectURL(file)
+    setImagePreview(localPreview)
+    try {
+      const url = await uploadArticleImage(file, accessToken)
+      setImage(url)
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Failed to upload image.')
+      setImage('')
+    } finally {
+      setImageUploading(false)
     }
   }
 
@@ -137,13 +147,7 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
     }
   }
 
-  async function handleSignOut() {
-    if (supabase) await supabase.auth.signOut()
-    setAccessToken(null)
-    setUserEmail(null)
-  }
-
-  if (!sessionReady) {
+  if (!ready) {
     return (
       <main style={{ paddingTop: 120, paddingBottom: 80, textAlign: 'center' }}>
         <div style={WRAP}>Loading…</div>
@@ -186,7 +190,7 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
               VIEW ARTICLE
             </button>
             <button
-              onClick={() => { setPublished(null); setTitle(''); setSubtitle(''); setExcerpt(''); setBody(''); setImage('') }}
+              onClick={() => { setPublished(null); setTitle(''); setSubtitle(''); setExcerpt(''); setBody(''); setImage(''); setImagePreview(null) }}
               style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '12px 24px', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}
             >
               WRITE ANOTHER
@@ -219,7 +223,7 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
                 {(['signin', 'signup'] as const).map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => setAuthMode(mode)}
+                    onClick={() => { setAuthMode(mode); setAuthError(''); setAuthSuccess('') }}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -246,6 +250,11 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
                   <label style={labelStyle}>PASSWORD</label>
                   <input type="password" required minLength={6} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={fieldStyle} />
                 </div>
+                {authSuccess && (
+                  <div style={{ background: 'rgba(34, 139, 87, 0.1)', border: '1px solid rgba(34, 139, 87, 0.25)', padding: '14px 16px' }}>
+                    <p style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: '#1a6b42', margin: 0, lineHeight: 1.6 }}>{authSuccess}</p>
+                  </div>
+                )}
                 {authError && <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: '#b42318', margin: 0 }}>{authError}</p>}
                 <button
                   type="submit"
@@ -260,9 +269,9 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: '1px solid var(--border)' }}>
                 <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--ink-2)' }}>
-                  Signed in as <strong style={{ color: 'var(--ink)' }}>{userEmail}</strong>
+                  Signed in as <strong style={{ color: 'var(--ink)' }}>{session?.user.email}</strong>
                 </span>
-                <button onClick={handleSignOut} style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '8px 14px', fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--ink-3)' }}>
+                <button onClick={() => void signOut()} style={{ background: 'none', border: '1px solid var(--border)', cursor: 'pointer', padding: '8px 14px', fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--ink-3)' }}>
                   Sign out
                 </button>
               </div>
@@ -290,10 +299,12 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
                   <label style={labelStyle}>BODY</label>
                   <textarea required value={body} onChange={(e) => setBody(e.target.value)} rows={14} style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.7 }} placeholder={"Write your article here.\n\nSeparate paragraphs with a blank line.\n\nFor pull quotes start a line with PULLQUOTE:Your quote here"} />
                 </div>
-                <div>
-                  <label style={labelStyle}>COVER IMAGE URL</label>
-                  <input value={image} onChange={(e) => setImage(e.target.value)} style={fieldStyle} placeholder="https://images.unsplash.com/..." />
-                </div>
+                <ImageUploadField
+                  label="COVER IMAGE"
+                  onFileSelect={handleImageSelect}
+                  previewUrl={imagePreview || image || null}
+                  uploading={imageUploading}
+                />
                 <div>
                   <label style={labelStyle}>AUTHOR</label>
                   <input value={author} onChange={(e) => setAuthor(e.target.value)} style={fieldStyle} />
@@ -301,8 +312,8 @@ export default function PublishPage({ navigate, onPublished }: PublishPageProps)
                 {publishError && <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: '#b42318', margin: 0 }}>{publishError}</p>}
                 <button
                   type="submit"
-                  disabled={publishLoading}
-                  style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', padding: '16px 28px', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', opacity: publishLoading ? 0.7 : 1 }}
+                  disabled={publishLoading || imageUploading}
+                  style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', padding: '16px 28px', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', opacity: publishLoading || imageUploading ? 0.7 : 1 }}
                 >
                   {publishLoading ? 'PUBLISHING…' : 'PUBLISH ARTICLE'}
                 </button>
